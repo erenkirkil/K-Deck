@@ -25,9 +25,12 @@ if [ -d "$MODULE_BUNDLE_PATH" ]; then
     cp -R "$MODULE_BUNDLE_PATH" "$BUNDLE_DIR/Contents/Resources/"
 fi
 
-# Resource dosyalarını doğrudan da Contents/Resources içine kopyalayalım (fallback için)
 if [ -d "$PROJECT_DIR/Sources/KDeck/Resources" ]; then
     cp -R "$PROJECT_DIR/Sources/KDeck/Resources/"* "$BUNDLE_DIR/Contents/Resources/"
+fi
+
+if [ -f "$PROJECT_DIR/Scripts/AppIcon.icns" ]; then
+    cp "$PROJECT_DIR/Scripts/AppIcon.icns" "$BUNDLE_DIR/Contents/Resources/AppIcon.icns"
 fi
 
 echo "🛡️ [4/4] Ad-hoc imza uygulanıyor..."
