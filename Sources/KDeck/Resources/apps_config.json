@@ -1,0 +1,72 @@
+[
+  {
+    "id": "closetoquit",
+    "name": "CloseToQuit",
+    "displayName": "CloseToQuit",
+    "description": "Kapatılan pencerelerin arka planda boş yere çalışmasını engeller, son pencere kapandığında uygulamadan otomatik tam çıkış (Quit) yapar.",
+    "githubOwner": "erenkirkil",
+    "githubRepo": "CloseToQuit",
+    "appFileName": "CloseToQuit.app",
+    "bundleIdentifier": "com.erenkirkil.CloseToQuit",
+    "assetPattern": ".*\\.dmg$",
+    "isMultiplatform": false,
+    "category": "Sistem & Verimlilik",
+    "iconSymbol": "xmark.circle.fill"
+  },
+  {
+    "id": "sclip",
+    "name": "sclip",
+    "displayName": "sclip Clipboard",
+    "description": "Hızlı, hafif ve pratik pano (clipboard) yöneticisi. Kopyalanan metinleri geçmişte saklar ve kolayca tekrar kullanmanızı sağlar.",
+    "githubOwner": "erenkirkil",
+    "githubRepo": "sclip",
+    "appFileName": "sclip.app",
+    "bundleIdentifier": "com.erenkirkil.sclip",
+    "assetPattern": ".*\\.dmg$",
+    "isMultiplatform": true,
+    "category": "Verimlilik",
+    "iconSymbol": "doc.on.clipboard.fill"
+  },
+  {
+    "id": "docktoggle",
+    "name": "DockToggle",
+    "displayName": "DockToggle",
+    "description": "macOS Dock çubuğunu tek kısayolla veya menüden hızlıca gizleyip göstermeye yarayan kompakt sistem aracı.",
+    "githubOwner": "erenkirkil",
+    "githubRepo": "DockToggle",
+    "appFileName": "DockToggle.app",
+    "bundleIdentifier": "com.erenkirkil.DockToggle",
+    "assetPattern": ".*\\.dmg$",
+    "isMultiplatform": false,
+    "category": "Sistem & Arayüz",
+    "iconSymbol": "dock.rectangle"
+  },
+  {
+    "id": "tiler",
+    "name": "Tiler",
+    "displayName": "Tiler Window Manager",
+    "description": "Açık pencereleri ekranınızda kolayca döşeyip boyutlandıran, üretkenliği artıran akıllı pencere yöneticisi.",
+    "githubOwner": "erenkirkil",
+    "githubRepo": "Tiler",
+    "appFileName": "Tiler.app",
+    "bundleIdentifier": "com.erenkirkil.Tiler",
+    "assetPattern": ".*\\.dmg$",
+    "isMultiplatform": false,
+    "category": "Pencere Yönetimi",
+    "iconSymbol": "rectangle.split.2x2.fill"
+  },
+  {
+    "id": "zenbar",
+    "name": "ZenBar",
+    "displayName": "ZenBar",
+    "description": "macOS menü çubuğundaki kalabalığı toparlayan, simgeleri minimalist şekilde gizleyip gösteren zarif menü çubuğu aracı.",
+    "githubOwner": "erenkirkil",
+    "githubRepo": "zenbar",
+    "appFileName": "ZenBar.app",
+    "bundleIdentifier": "com.erenkirkil.zenbar",
+    "assetPattern": ".*\\.dmg$",
+    "isMultiplatform": false,
+    "category": "Menü Çubuğu",
+    "iconSymbol": "menubar.rectangle"
+  }
+]
