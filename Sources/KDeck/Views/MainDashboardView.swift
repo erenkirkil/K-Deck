@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct MainDashboardView: View {
-    @StateObject private var manager = AppManager.shared
+    @State private var manager = AppManager.shared
     @State private var showSettings: Bool = false
 
     private let columns = [

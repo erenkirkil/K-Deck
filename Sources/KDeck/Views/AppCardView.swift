@@ -2,7 +2,7 @@ import SwiftUI
 
 public struct AppCardView: View {
     public let app: ManagedApp
-    @ObservedObject var manager: AppManager
+    let manager: AppManager
     @State private var showDetails: Bool = false
 
     public init(app: ManagedApp, manager: AppManager) {

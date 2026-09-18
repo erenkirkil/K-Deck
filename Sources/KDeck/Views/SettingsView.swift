@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct SettingsView: View {
-    @ObservedObject var manager: AppManager
+    let manager: AppManager
     @Environment(\.dismiss) private var dismiss
     @State private var tokenInput: String = ""
     @State private var isAdvancedExpanded: Bool = false
@@ -122,7 +122,7 @@ public struct SettingsView: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("K-Deck v1.0.0")
+                            Text("K-Deck v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0")")
                                 .font(.system(size: 12, weight: .semibold))
                             Text("Eren Kırkıl macOS uygulamaları merkezi kurulum ve otomatik güncelleme aracı.")
                                 .font(.system(size: 11))

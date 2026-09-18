@@ -26,4 +26,7 @@ swift run
 
 # Bağımsız .app paketi oluşturma
 ./Scripts/build_app.sh
+
+# Apple Notarized DMG oluşturma ve GitHub Release'e otomatik yükleme
+./Scripts/release.sh
 ```

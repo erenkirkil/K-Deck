@@ -1,7 +1,7 @@
 import Foundation
 
 /// Semantic Version (SemVer) ayrıştırma ve karşılaştırma yardımcısı
-public struct SemVer: Comparable, Equatable, CustomStringConvertible {
+public struct SemVer: Comparable, Equatable, CustomStringConvertible, Sendable {
     public let major: Int
     public let minor: Int
     public let patch: Int

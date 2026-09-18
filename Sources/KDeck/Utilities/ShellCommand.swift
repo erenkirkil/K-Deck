@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ShellResult {
+public struct ShellResult: Sendable {
     public let exitCode: Int32
     public let stdout: String
     public let stderr: String
@@ -10,7 +10,7 @@ public struct ShellResult {
     }
 }
 
-public enum ShellCommand {
+public enum ShellCommand: Sendable {
     /// Komut satırı aracını çalıştırır ve çıktısını döndürür
     @discardableResult
     public static func run(_ executable: String, arguments: [String] = []) async throws -> ShellResult {

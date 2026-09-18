@@ -7,7 +7,8 @@ public struct InstalledAppInfo: Sendable {
     public let isRunning: Bool
 }
 
-public final class LocalAppScannerService: @unchecked Sendable {
+@MainActor
+public final class LocalAppScannerService: Sendable {
     public static let shared = LocalAppScannerService()
 
     private let standardAppDirs: [URL] = [

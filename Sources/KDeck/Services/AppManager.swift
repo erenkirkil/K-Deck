@@ -1,27 +1,28 @@
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 
+@Observable
 @MainActor
-public final class AppManager: ObservableObject {
+public final class AppManager {
     public static let shared = AppManager()
 
-    @Published public var apps: [ManagedApp] = []
-    @Published public var statuses: [String: AppStatus] = [:]
-    @Published public var releases: [String: GitHubRelease] = [:]
-    @Published public var installedInfos: [String: InstalledAppInfo] = [:]
-    @Published public var isRefreshingAll: Bool = false
-    @Published public var selectedFilter: AppFilter = .all
-    @Published public var searchText: String = ""
+    public var apps: [ManagedApp] = []
+    public var statuses: [String: AppStatus] = [:]
+    public var releases: [String: GitHubRelease] = [:]
+    public var installedInfos: [String: InstalledAppInfo] = [:]
+    public var isRefreshingAll: Bool = false
+    public var selectedFilter: AppFilter = .all
+    public var searchText: String = ""
 
     // Ayarlar
-    @Published public var githubToken: String {
+    public var githubToken: String {
         didSet {
             UserDefaults.standard.set(githubToken, forKey: "kirkil_github_token")
         }
     }
 
-    public enum AppFilter: String, CaseIterable, Identifiable {
+    public enum AppFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "Tümü"
         case installed = "Yüklü Olanlar"
         case updates = "Güncelleme Var"
@@ -35,12 +36,43 @@ public final class AppManager: ObservableObject {
         loadConfig()
     }
 
+    /// apps_config.json dosyasının URL'sini bulur (App bundle, Resource bundle veya çalışma dizini)
+    private static func findAppsConfigURL() -> URL? {
+        // 1. Standart macOS app bundle (Contents/Resources)
+        if let url = Bundle.main.url(forResource: "apps_config", withExtension: "json") {
+            return url
+        }
+
+        // 2. Resource bundle (Contents/Resources/KDeck_KDeck.bundle)
+        if let bundleUrl = Bundle.main.url(forResource: "KDeck_KDeck", withExtension: "bundle"),
+           let bundle = Bundle(url: bundleUrl),
+           let url = bundle.url(forResource: "apps_config", withExtension: "json") {
+            return url
+        }
+
+        // 3. Bundle kök dizini yanındaki KDeck_KDeck.bundle
+        let directBundleUrl = Bundle.main.bundleURL.appendingPathComponent("KDeck_KDeck.bundle")
+        if let bundle = Bundle(url: directBundleUrl),
+           let url = bundle.url(forResource: "apps_config", withExtension: "json") {
+            return url
+        }
+
+        // 4. Geliştirme ortamı (çalışma dizini altındaki Sources/KDeck/Resources)
+        let devPath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/KDeck/Resources/apps_config.json")
+        if FileManager.default.fileExists(atPath: devPath.path) {
+            return devPath
+        }
+
+        return nil
+    }
+
     /// Konfigürasyon dosyasını (apps_config.json) yükler
     public func loadConfig() {
         var loadedApps: [ManagedApp] = []
 
-        // 1. Bundle modülü içinden oku
-        if let url = Bundle.module.url(forResource: "apps_config", withExtension: "json") {
+        // 1. Konfigürasyon dosyasından oku
+        if let url = Self.findAppsConfigURL() {
             if let data = try? Data(contentsOf: url),
                let decoded = try? JSONDecoder().decode([ManagedApp].self, from: data) {
                 loadedApps = decoded
