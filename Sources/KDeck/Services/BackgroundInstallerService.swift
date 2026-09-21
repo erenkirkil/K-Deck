@@ -25,6 +25,27 @@ public actor BackgroundInstallerService {
         }
     }
 
+    /// İndirmeye izin verilen host'lar. GitHub release varlıkları `github.com` üzerinden
+    /// başlar ve `objects.githubusercontent.com`'a yönlendirilir.
+    static let allowedDownloadHosts: Set<String> = [
+        "github.com",
+        "www.github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+    ]
+
+    /// İndirme URL'sinin şemasını ve host'unu denetler. Geçmezse kurulum hiç başlamaz.
+    static func assertTrustedDownloadURL(_ url: URL) throws {
+        guard url.scheme?.lowercased() == "https" else {
+            throw InstallError.downloadFailed(
+                "Yalnızca https indirmelerine izin veriliyor (gelen: \(url.scheme ?? "şemasız")).")
+        }
+        guard let host = url.host?.lowercased(), allowedDownloadHosts.contains(host) else {
+            throw InstallError.downloadFailed(
+                "İzin verilmeyen indirme adresi: \(url.host ?? "host yok").")
+        }
+    }
+
     /// Arşiv/imaj içinden kurulacak `.app`'i seçer.
     ///
     /// Eskiden beklenen isim yoksa "bulunan ilk .app" alınıp hedefe *beklenen adla*
@@ -34,8 +55,8 @@ public actor BackgroundInstallerService {
     /// karşılaştıracağı için yanlış paket orada elenir.
     private func locateApp(in directory: URL, expecting app: ManagedApp) throws -> URL {
         let exact = directory.appendingPathComponent(app.appFileName)
-        if FileManager.default.fileExists(atPath: exact.path) {
-            return exact
+        if let resolved = try validatedBundle(at: exact, mustStayWithin: directory) {
+            return resolved
         }
         let candidates = ((try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil)) ?? [])
@@ -46,7 +67,37 @@ public actor BackgroundInstallerService {
             throw InstallError.ambiguousPackage(
                 "\(app.appFileName) bulunamadı; pakette \(candidates.count) farklı .app var.")
         }
-        return only
+        guard let resolved = try validatedBundle(at: only, mustStayWithin: directory) else {
+            throw InstallError.appNotFoundInPackage
+        }
+        return resolved
+    }
+
+    /// Adayın gerçekten paketin içinde duran bir dizin (`.app` bundle) olduğunu doğrular.
+    ///
+    /// `fileExists(atPath:)` sembolik bağlantıyı izler: paket içindeki bir bağlantı disk
+    /// üzerinde bambaşka bir yeri gösterebilir ve o zaman doğruladığımız şeyle kopyaladığımız
+    /// şey ayrışır. Bağlantılar çözülür ve sonucun hâlâ imaj/arşiv kökü altında kaldığı
+    /// kontrol edilir.
+    /// - Returns: Geçerliyse çözülmüş URL, aday hiç yoksa `nil`.
+    private func validatedBundle(at candidate: URL, mustStayWithin root: URL) throws -> URL? {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory) else {
+            return nil
+        }
+        guard isDirectory.boolValue else {
+            throw InstallError.ambiguousPackage("\(candidate.lastPathComponent) bir uygulama paketi değil.")
+        }
+        let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
+        let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
+        // Sondaki "/" farkına takılmamak için bileşen bazlı karşılaştırma.
+        guard resolved.pathComponents.count > resolvedRoot.pathComponents.count,
+              Array(resolved.pathComponents.prefix(resolvedRoot.pathComponents.count))
+                  == resolvedRoot.pathComponents else {
+            throw InstallError.ambiguousPackage(
+                "\(candidate.lastPathComponent) paketin dışına işaret ediyor.")
+        }
+        return resolved
     }
 
     /// Kopyalamadan önce imzayı, Gatekeeper değerlendirmesini ve yayıncı kimliğini denetler.
@@ -110,8 +161,16 @@ public actor BackgroundInstallerService {
         // kontrolü yok ediyordu. Artık yalnızca imza + Gatekeeper + Team ID denetiminin
         // üçü de geçtikten sonra buraya ulaşılır: denetimi kendimiz yaptığımız için
         // bayrağı kaldırmak güvenlidir ve kullanıcı gereksiz bir diyalog görmez.
-        onStep("Karantina bayrağı kaldırılıyor...")
         let finalAppUrl = destinationDir.appendingPathComponent(app.appFileName)
+
+        // Kurulan kopyayı TEKRAR doğrula. Kaynağı doğrulamak tek başına yetmez: karantina
+        // bayrağını kaldırmak Gatekeeper'ın bağımsız denetimini devre dışı bırakıyor, o
+        // yüzden o bayrağı kaldırmadan önceki son kontrol, gerçekten çalıştırılacak olan
+        // dosyanın üzerinde yapılmalı.
+        onStep("Kurulan kopya doğrulanıyor...")
+        try await verify(finalAppUrl, against: app)
+
+        onStep("Karantina bayrağı kaldırılıyor...")
         _ = try? await ShellCommand.run("/usr/bin/xattr", arguments: ["-cr", finalAppUrl.path])
 
         // 5. Geçici indirme klasörünü temizle
@@ -129,6 +188,10 @@ public actor BackgroundInstallerService {
         guard let url = URL(string: urlString) else {
             throw InstallError.downloadFailed("Geçersiz URL: \(urlString)")
         }
+        // URL, GitHub API yanıtından geliyor; doğrulanmadan kullanılırsa `file://` yerel
+        // bir dosyayı "indirebilir" ya da istek bambaşka bir host'a gidebilir. İmza
+        // doğrulaması kötü içeriği yakalar ama tek savunma katmanı olmamalı.
+        try Self.assertTrustedDownloadURL(url)
 
         let delegate = DownloadProgressDelegate(destination: destination, onProgress: onProgress)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
@@ -154,6 +217,10 @@ public actor BackgroundInstallerService {
             dmgPath.path,
             "-nobrowse",
             "-quiet",
+            // Yazılabilir bağlanan bir imajda, imzayı doğruladıktan sonra kopyalayana
+            // kadar geçen sürede içerik değişebilir. Salt-okunur bağlamak bu pencereyi
+            // kapatır.
+            "-readonly",
             "-mountpoint",
             mountPoint.path
         ])
@@ -280,6 +347,20 @@ private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelega
             continuation?.resume(throwing: error)
             continuation = nil
         }
+    }
+
+    /// Yönlendirme zinciri de denetlenir: https'ten http'ye düşürme ya da izin verilmeyen
+    /// bir host'a sapma engellenir. (ATS http'yi zaten engelliyor; bu ikinci katman.)
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        guard let url = request.url,
+              (try? BackgroundInstallerService.assertTrustedDownloadURL(url)) != nil else {
+            completionHandler(nil)   // yönlendirmeyi izleme
+            return
+        }
+        completionHandler(request)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

@@ -47,9 +47,4 @@ public enum ShellCommand: Sendable {
         }
     }
 
-    /// '/bin/zsh -c "..."' komutu çalıştırma kolaylığı
-    @discardableResult
-    public static func runZsh(_ commandString: String) async throws -> ShellResult {
-        return try await run("/bin/zsh", arguments: ["-c", commandString])
-    }
 }

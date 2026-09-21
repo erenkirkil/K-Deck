@@ -79,3 +79,44 @@ final class SemVerTests: XCTestCase {
         XCTAssertFalse(SemVer("2.3.4") < SemVer("2.3.4"))
     }
 }
+
+/// İndirme adresi denetimi. Bu fonksiyon, imza doğrulamasından ÖNCE gelen ilk savunma
+/// katmanı: URL doğrudan GitHub API yanıtından geldiği için şema ve host burada elenir.
+final class DownloadURLTrustTests: XCTestCase {
+
+    private func accepts(_ string: String) -> Bool {
+        guard let url = URL(string: string) else { return false }
+        return (try? BackgroundInstallerService.assertTrustedDownloadURL(url)) != nil
+    }
+
+    func testAcceptsGitHubReleaseAsset() {
+        XCTAssertTrue(accepts("https://github.com/erenkirkil/ZenBar/releases/download/v1.2.0/ZenBar.dmg"))
+    }
+
+    func testAcceptsRedirectTargetHost() {
+        XCTAssertTrue(accepts("https://objects.githubusercontent.com/github-production-release-asset/1/2"))
+    }
+
+    func testRejectsPlainHTTP() {
+        XCTAssertFalse(accepts("http://github.com/erenkirkil/ZenBar/releases/download/v1.2.0/ZenBar.dmg"))
+    }
+
+    /// `file://` ile yerel bir dosya "indirilemez".
+    func testRejectsFileScheme() {
+        XCTAssertFalse(accepts("file:///etc/passwd"))
+    }
+
+    func testRejectsForeignHost() {
+        XCTAssertFalse(accepts("https://evil.example.com/ZenBar.dmg"))
+    }
+
+    /// Host adı sonuna github.com eklenerek kandırılamamalı.
+    func testRejectsLookalikeHost() {
+        XCTAssertFalse(accepts("https://github.com.evil.example.com/ZenBar.dmg"))
+        XCTAssertFalse(accepts("https://notgithub.com/ZenBar.dmg"))
+    }
+
+    func testHostMatchIsCaseInsensitive() {
+        XCTAssertTrue(accepts("https://GitHub.com/erenkirkil/Tiler/releases/download/v1.0.0/Tiler.dmg"))
+    }
+}

@@ -34,6 +34,10 @@ if [ -f "$PROJECT_DIR/Scripts/AppIcon.icns" ]; then
 fi
 
 echo "🛡️ [4/4] Ad-hoc imza uygulanıyor..."
+# DİKKAT: "--sign -" adhoc imzadır ve bilinçlidir — bu script yalnızca yerel
+# geliştirme paketi üretir. Adhoc imzalı bir paket Gatekeeper'dan geçmez ve TCC
+# izinleri cdhash'e bağlandığı için her derlemede düşer. Dağıtım için Scripts/release.sh
+# kullanılır; o Developer ID ile imzalar, notarize eder ve doğrular.
 codesign --force --deep --sign - "$BUNDLE_DIR"
 
 echo ""

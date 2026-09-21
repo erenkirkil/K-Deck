@@ -14,7 +14,17 @@ public final class GitHubUpdateService: Sendable {
 
     /// GitHub'dan en güncel sürüm bilgisini çeker
     public func fetchLatestRelease(owner: String, repo: String, token: String? = nil) async throws -> GitHubRelease {
-        guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest") else {
+        // owner/repo apps_config.json'dan geliyor. Bundle imzalı olduğu için pratikte
+        // güvenilir, ama doğrudan yola gömmek path enjeksiyonuna açık bir kalıp — kaçışlı
+        // kur ve host'u sabit tut.
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        guard let safeOwner = owner.addingPercentEncoding(withAllowedCharacters: allowed),
+              let safeRepo = repo.addingPercentEncoding(withAllowedCharacters: allowed),
+              var components = URLComponents(string: "https://api.github.com") else {
+            throw URLError(.badURL)
+        }
+        components.path = "/repos/\(safeOwner)/\(safeRepo)/releases/latest"
+        guard let url = components.url, url.host == "api.github.com" else {
             throw URLError(.badURL)
         }
 
