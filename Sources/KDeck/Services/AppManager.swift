@@ -16,9 +16,12 @@ public final class AppManager {
     public var searchText: String = ""
 
     // Ayarlar
+    private static let tokenAccount = "github_pat"
+
+    /// GitHub PAT. Keychain'de saklanır — eskiden düz metin UserDefaults'taydı.
     public var githubToken: String {
         didSet {
-            UserDefaults.standard.set(githubToken, forKey: "kirkil_github_token")
+            KeychainStore.set(githubToken, for: Self.tokenAccount)
         }
     }
 
@@ -32,7 +35,17 @@ public final class AppManager {
     }
 
     public init() {
-        self.githubToken = UserDefaults.standard.string(forKey: "kirkil_github_token") ?? ""
+        // Keychain'den oku; eski sürümden kalan düz metin token varsa bir kez taşı ve sil.
+        if let stored = KeychainStore.get(Self.tokenAccount) {
+            self.githubToken = stored
+        } else if let legacy = UserDefaults.standard.string(forKey: "kirkil_github_token"),
+                  !legacy.isEmpty {
+            self.githubToken = legacy
+            KeychainStore.set(legacy, for: Self.tokenAccount)
+            UserDefaults.standard.removeObject(forKey: "kirkil_github_token")
+        } else {
+            self.githubToken = ""
+        }
         loadConfig()
     }
 

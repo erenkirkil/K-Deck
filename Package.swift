@@ -21,6 +21,11 @@ let package = Package(
             resources: [
                 .process("Resources")
             ]
+        ),
+        .testTarget(
+            name: "KDeckTests",
+            dependencies: ["KDeck"],
+            path: "Tests/KDeckTests"
         )
     ],
     swiftLanguageModes: [.v6]

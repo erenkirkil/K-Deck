@@ -9,6 +9,8 @@ public actor BackgroundInstallerService {
         case appNotFoundInPackage
         case copyFailed(String)
         case detachFailed(String)
+        case verificationFailed(String)
+        case ambiguousPackage(String)
 
         public var errorDescription: String? {
             switch self {
@@ -17,7 +19,45 @@ public actor BackgroundInstallerService {
             case .appNotFoundInPackage: return "Paket içeriğinde .app uygulaması bulunamadı."
             case .copyFailed(let msg): return "Uygulama /Applications dizinine kopyalanamadı: \(msg)"
             case .detachFailed(let msg): return "Sanal disk bağlantısı kesilemedi: \(msg)"
+            case .verificationFailed(let msg): return "Güvenlik doğrulaması başarısız: \(msg)"
+            case .ambiguousPackage(let msg): return "Paket içeriği beklenenle uyuşmuyor: \(msg)"
             }
+        }
+    }
+
+    /// Arşiv/imaj içinden kurulacak `.app`'i seçer.
+    ///
+    /// Eskiden beklenen isim yoksa "bulunan ilk .app" alınıp hedefe *beklenen adla*
+    /// kopyalanıyordu — yani içeriği bambaşka bir paket doğru isimle kurulabiliyordu.
+    /// Artık yalnızca tam ad eşleşmesi kabul edilir; ad tutmuyorsa ve pakette tek bir
+    /// .app varsa o aday olarak alınır ama imza doğrulaması bundle kimliğini zaten
+    /// karşılaştıracağı için yanlış paket orada elenir.
+    private func locateApp(in directory: URL, expecting app: ManagedApp) throws -> URL {
+        let exact = directory.appendingPathComponent(app.appFileName)
+        if FileManager.default.fileExists(atPath: exact.path) {
+            return exact
+        }
+        let candidates = ((try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "app" }
+
+        guard let only = candidates.first, candidates.count == 1 else {
+            if candidates.isEmpty { throw InstallError.appNotFoundInPackage }
+            throw InstallError.ambiguousPackage(
+                "\(app.appFileName) bulunamadı; pakette \(candidates.count) farklı .app var.")
+        }
+        return only
+    }
+
+    /// Kopyalamadan önce imzayı, Gatekeeper değerlendirmesini ve yayıncı kimliğini denetler.
+    private func verify(_ appURL: URL, against app: ManagedApp) async throws {
+        do {
+            try await SignatureVerifier.verify(
+                appAt: appURL,
+                expectedTeamID: app.expectedTeamID ?? SignatureVerifier.defaultTeamID,
+                expectedBundleID: app.bundleIdentifier)
+        } catch {
+            throw InstallError.verificationFailed(error.localizedDescription)
         }
     }
 
@@ -63,8 +103,14 @@ public actor BackgroundInstallerService {
             throw InstallError.downloadFailed("Desteklenmeyen paket türü: \(asset.name)")
         }
 
-        // 4. Karantina bayrağını temizle (Gatekeeper onayı için)
-        onStep("macOS güvenlik izinleri düzenleniyor (xattr)...")
+        // 4. Karantina bayrağını temizle.
+        //
+        // Bu satır daha önce HİÇBİR doğrulama yapılmadan çalışıyordu ve Gatekeeper'ın
+        // ilk açılış denetimini kaldırdığı için kurcalanmış bir sürümü yakalayacak tek
+        // kontrolü yok ediyordu. Artık yalnızca imza + Gatekeeper + Team ID denetiminin
+        // üçü de geçtikten sonra buraya ulaşılır: denetimi kendimiz yaptığımız için
+        // bayrağı kaldırmak güvenlidir ve kullanıcı gereksiz bir diyalog görmez.
+        onStep("Karantina bayrağı kaldırılıyor...")
         let finalAppUrl = destinationDir.appendingPathComponent(app.appFileName)
         _ = try? await ShellCommand.run("/usr/bin/xattr", arguments: ["-cr", finalAppUrl.path])
 
@@ -126,21 +172,11 @@ public actor BackgroundInstallerService {
         }
 
         onStep("Uygulama paketi taranıyor...")
-        // Mount point içindeki .app paketini ara
-        var sourceAppUrl: URL? = nil
-        let directAppUrl = mountPoint.appendingPathComponent(app.appFileName)
+        let foundApp = try locateApp(in: mountPoint, expecting: app)
 
-        if FileManager.default.fileExists(atPath: directAppUrl.path) {
-            sourceAppUrl = directAppUrl
-        } else {
-            // Mount klasöründeki ilk .app paketini bul
-            let items = (try? FileManager.default.contentsOfDirectory(at: mountPoint, includingPropertiesForKeys: nil)) ?? []
-            sourceAppUrl = items.first(where: { $0.pathExtension.lowercased() == "app" })
-        }
-
-        guard let foundApp = sourceAppUrl else {
-            throw InstallError.appNotFoundInPackage
-        }
+        // Kopyalamadan ÖNCE doğrula — bağlı imajdaki paket üzerinde.
+        onStep("İmza ve yayıncı kimliği doğrulanıyor...")
+        try await verify(foundApp, against: app)
 
         onStep("Uygulama /Applications klasörüne yerleştiriliyor...")
         let destinationAppUrl = destinationDir.appendingPathComponent(app.appFileName)
@@ -182,18 +218,10 @@ public actor BackgroundInstallerService {
         }
 
         onStep("Uygulama bulunuyor...")
-        var sourceAppUrl: URL? = nil
-        let directAppUrl = extractDir.appendingPathComponent(app.appFileName)
-        if FileManager.default.fileExists(atPath: directAppUrl.path) {
-            sourceAppUrl = directAppUrl
-        } else {
-            let items = (try? FileManager.default.contentsOfDirectory(at: extractDir, includingPropertiesForKeys: nil)) ?? []
-            sourceAppUrl = items.first(where: { $0.pathExtension.lowercased() == "app" })
-        }
+        let foundApp = try locateApp(in: extractDir, expecting: app)
 
-        guard let foundApp = sourceAppUrl else {
-            throw InstallError.appNotFoundInPackage
-        }
+        onStep("İmza ve yayıncı kimliği doğrulanıyor...")
+        try await verify(foundApp, against: app)
 
         onStep("Uygulama /Applications klasörüne yerleştiriliyor...")
         let destinationAppUrl = destinationDir.appendingPathComponent(app.appFileName)

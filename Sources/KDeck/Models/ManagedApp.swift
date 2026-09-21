@@ -13,6 +13,9 @@ public struct ManagedApp: Identifiable, Codable, Equatable, Sendable {
     public let isMultiplatform: Bool
     public let category: String
     public let iconSymbol: String
+    /// Beklenen yayıncı Team ID'si. JSON'da yoksa `SignatureVerifier.defaultTeamID`
+    /// kullanılır (Optional olduğu için mevcut apps_config.json'lar bozulmaz).
+    public let expectedTeamID: String?
 
     public var githubUrl: URL {
         URL(string: "https://github.com/\(githubOwner)/\(githubRepo)")!
@@ -34,7 +37,8 @@ public struct ManagedApp: Identifiable, Codable, Equatable, Sendable {
         assetPattern: String = ".*\\.dmg$",
         isMultiplatform: Bool = false,
         category: String = "Genel",
-        iconSymbol: String = "app.badge"
+        iconSymbol: String = "app.badge",
+        expectedTeamID: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -48,5 +52,6 @@ public struct ManagedApp: Identifiable, Codable, Equatable, Sendable {
         self.isMultiplatform = isMultiplatform
         self.category = category
         self.iconSymbol = iconSymbol
+        self.expectedTeamID = expectedTeamID
     }
 }

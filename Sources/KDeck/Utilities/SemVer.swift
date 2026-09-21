@@ -51,9 +51,29 @@ public struct SemVer: Comparable, Equatable, CustomStringConvertible, Sendable {
             return false
         }
         if let lhsPre = lhs.prerelease, let rhsPre = rhs.prerelease {
-            return lhsPre < rhsPre
+            return comparePrerelease(lhsPre, rhsPre)
         }
         return false
+    }
+
+    /// SemVer 2.0 kuralı: ön-sürüm etiketi noktadan bölünür, her parça ayrı karşılaştırılır.
+    /// Sayısal parçalar sayı olarak karşılaştırılır — düz string karşılaştırması
+    /// `beta.10`'u `beta.9`'dan küçük sayıyordu. Sayısal parça alfanümerikten küçüktür.
+    static func comparePrerelease(_ lhs: String, _ rhs: String) -> Bool {
+        let l = lhs.split(separator: ".", omittingEmptySubsequences: false)
+        let r = rhs.split(separator: ".", omittingEmptySubsequences: false)
+        for index in 0..<min(l.count, r.count) {
+            let lp = String(l[index]), rp = String(r[index])
+            if lp == rp { continue }
+            switch (Int(lp), Int(rp)) {
+            case let (ln?, rn?): return ln < rn      // iki taraf da sayı
+            case (_?, nil):      return true         // sayısal < alfanümerik
+            case (nil, _?):      return false
+            case (nil, nil):     return lp < rp
+            }
+        }
+        // Tüm ortak parçalar eşitse, daha az parçası olan küçüktür.
+        return l.count < r.count
     }
 
     public static func == (lhs: SemVer, rhs: SemVer) -> Bool {
