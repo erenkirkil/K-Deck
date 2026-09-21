@@ -17,6 +17,12 @@ public struct MainDashboardView: View {
 
             Divider()
 
+            // MARK: - k-deck'in Kendi Güncelleme Bildirimi
+            if let update = manager.selfUpdate, !manager.selfUpdateDismissed {
+                selfUpdateBanner(update)
+                Divider()
+            }
+
             // MARK: - Filtre ve Arama Çubuğu
             filterBarView
                 .padding(.horizontal, 14)
@@ -52,6 +58,48 @@ public struct MainDashboardView: View {
         .task {
             await manager.refreshAll()
         }
+    }
+
+    // MARK: - Kendi Güncellemesi
+    /// k-deck kendini kuramaz (bkz. `AppManager.checkSelfUpdate`), bu yüzden burada
+    /// yalnızca haber verilir ve indirme sayfasına yönlendirilir.
+    private func selfUpdateBanner(_ update: AppManager.SelfUpdateInfo) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.white)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("K-Deck \(update.latestVersion) yayında")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Şu an \(update.currentVersion) kullanıyorsunuz. K-Deck kendini güncelleyemez, "
+                     + "yeni sürümü elle indirmeniz gerekiyor.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("İndirme Sayfası") {
+                NSWorkspace.shared.open(update.releasesURL)
+            }
+            .controlSize(.small)
+
+            Button {
+                manager.selfUpdateDismissed = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .buttonStyle(.plain)
+            .help("Bu oturumda gizle")
+            .accessibilityLabel("Bildirimi kapat")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.accentColor)
     }
 
     // MARK: - Header

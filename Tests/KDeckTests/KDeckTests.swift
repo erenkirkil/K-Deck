@@ -120,3 +120,43 @@ final class DownloadURLTrustTests: XCTestCase {
         XCTAssertTrue(accepts("https://GitHub.com/erenkirkil/Tiler/releases/download/v1.0.0/Tiler.dmg"))
     }
 }
+
+/// k-deck'in kendi güncelleme bildirimi. Bildirim yalnızca gerçekten yeni bir sürüm
+/// varken çıkmalı; yanlış pozitif, kullanıcıyı boşuna indirme sayfasına yollar.
+final class SelfUpdateDecisionTests: XCTestCase {
+
+    private func notifies(current: String, latest: String) -> Bool {
+        AppManager.shouldNotifySelfUpdate(current: current, latest: latest)
+    }
+
+    func testNotifiesWhenNewerExists() {
+        XCTAssertTrue(notifies(current: "1.2.0", latest: "1.3.0"))
+        XCTAssertTrue(notifies(current: "1.2.0", latest: "2.0.0"))
+    }
+
+    func testSilentWhenUpToDate() {
+        XCTAssertFalse(notifies(current: "1.2.0", latest: "1.2.0"))
+    }
+
+    /// Yerelde daha yeni bir derleme varken (geliştirici makinesi) uyarı çıkmamalı.
+    func testSilentWhenLocalIsNewer() {
+        XCTAssertFalse(notifies(current: "1.3.0", latest: "1.2.0"))
+    }
+
+    func testHandlesVPrefixedTag() {
+        XCTAssertTrue(notifies(current: "1.2.0", latest: "v1.3.0"))
+        XCTAssertFalse(notifies(current: "1.2.0", latest: "v1.2.0"))
+    }
+
+    /// Sürüm okunamadıysa sessiz kal — yoksa her açılışta yanlış uyarı verir.
+    func testSilentOnUnreadableVersions() {
+        XCTAssertFalse(notifies(current: "", latest: "1.3.0"))
+        XCTAssertFalse(notifies(current: "1.2.0", latest: ""))
+        XCTAssertFalse(notifies(current: "   ", latest: "1.3.0"))
+    }
+
+    /// Ön sürüm, yayınlanmış sürümden yeni sayılmamalı.
+    func testPrereleaseIsNotNewerThanRelease() {
+        XCTAssertFalse(notifies(current: "1.2.0", latest: "1.2.0-beta.1"))
+    }
+}

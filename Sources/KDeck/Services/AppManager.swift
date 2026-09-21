@@ -12,6 +12,19 @@ public final class AppManager {
     public var releases: [String: GitHubRelease] = [:]
     public var installedInfos: [String: InstalledAppInfo] = [:]
     public var isRefreshingAll: Bool = false
+
+    /// k-deck'in kendisi için bulunan yeni sürüm (varsa). Yalnızca haber verilir.
+    public var selfUpdate: SelfUpdateInfo?
+    /// Kullanıcı bu oturumda bildirimi kapattıysa tekrar gösterme.
+    public var selfUpdateDismissed: Bool = false
+    /// Kontrol uygulama ömrü boyunca bir kez yapılır (GitHub anonim limiti saatte 60).
+    private var selfUpdateChecked = false
+
+    public struct SelfUpdateInfo: Sendable, Equatable {
+        public let currentVersion: String
+        public let latestVersion: String
+        public let releasesURL: URL
+    }
     public var selectedFilter: AppFilter = .all
     public var searchText: String = ""
 
@@ -115,8 +128,55 @@ public final class AppManager {
                     await self.checkStatus(for: app)
                 }
             }
+            group.addTask { await self.checkSelfUpdate() }
         }
     }
+
+    /// k-deck kendi sürümünü GitHub'daki son sürümle karşılaştırır ve yenisi varsa
+    /// kullanıcıyı bilgilendirir.
+    ///
+    /// **Neden kurmuyor da yalnızca haber veriyor:** k-deck kurulum akışında hedef
+    /// uygulamayı önce kapatıyor (`LocalAppScannerService.terminateIfRunning`, gerekirse
+    /// `forceTerminate`). Kendini o listeye koysaydı kurulumun ortasında kendini
+    /// öldürürdü. Çalışan bir `.app`'i yerinde değiştirmek ayrıca ayrı bir yardımcı süreç
+    /// gerektirir. Bu yüzden k-deck `apps_config.json`'da yer almaz; keşif sorununu
+    /// çözmek için sürüm karşılaştırması burada yapılır, indirme kullanıcıya bırakılır.
+    public func checkSelfUpdate() async {
+        guard !selfUpdateChecked else { return }
+        selfUpdateChecked = true
+
+        // Paketlenmemiş geliştirme çalıştırmasında (`swift run`) Info.plist yoktur —
+        // geliştiriciyi rahatsız etme.
+        guard let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !current.isEmpty else { return }
+
+        let token = githubToken.isEmpty ? nil : githubToken
+        guard let release = try? await GitHubUpdateService.shared.fetchLatestRelease(
+                owner: Self.selfOwner, repo: Self.selfRepo, token: token) else {
+            return   // çevrimdışı ya da limit dolu: sessiz kal, uyarı üretme
+        }
+
+        let latest = release.cleanVersion
+        guard Self.shouldNotifySelfUpdate(current: current, latest: latest) else { return }
+        guard let url = URL(string: "https://github.com/\(Self.selfOwner)/\(Self.selfRepo)/releases/latest") else { return }
+
+        selfUpdate = SelfUpdateInfo(currentVersion: current, latestVersion: latest, releasesURL: url)
+    }
+
+    /// Bildirim gösterilmeli mi? Saf karar — ağdan ve `Bundle`'dan bağımsız olduğu için
+    /// test edilebilir. Boş/bozuk sürüm dizeleri `SemVer` tarafından 0.0.0'a indirgendiği
+    /// için burada ayrıca elenir; aksi halde sürümü okunamayan bir paket her açılışta
+    /// "güncelleme var" derdi.
+    nonisolated static func shouldNotifySelfUpdate(current: String, latest: String) -> Bool {
+        let c = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        let l = latest.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !c.isEmpty, !l.isEmpty else { return false }
+        return SemVer(l) > SemVer(c)
+    }
+
+    /// k-deck'in kendi deposu. Uygulamanın kimliği yapılandırmayla değişmemeli.
+    private static let selfOwner = "erenkirkil"
+    private static let selfRepo = "k-deck"
 
     /// Tek bir uygulamanın durumunu denetler
     public func checkStatus(for app: ManagedApp) async {
