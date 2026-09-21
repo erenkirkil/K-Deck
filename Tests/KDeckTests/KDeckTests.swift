@@ -160,3 +160,49 @@ final class SelfUpdateDecisionTests: XCTestCase {
         XCTAssertFalse(notifies(current: "1.2.0", latest: "1.2.0-beta.1"))
     }
 }
+
+/// Yapılandırmadaki kimliklerin gerçek paketlerle tutarlılığı.
+///
+/// Gerçek bir hatadan doğdu: apps_config.json'daki `bundleIdentifier` değerlerinin
+/// dördü yanlış harf biçimindeydi (`com.erenkirkil.Tiler` ↔ `com.erenkirkil.tiler`).
+/// İmza doğrulaması bu alanı tam eşleşmeyle karşılaştırdığı için temiz bir sistemde
+/// beş kurulumun dördü "paket kimliği uyuşmuyor" diyerek durdu.
+final class AppsConfigIntegrityTests: XCTestCase {
+
+    /// Depolardan doğrulanmış gerçek bundle kimlikleri.
+    private let realBundleIDs = [
+        "closetoquit": "com.erenkirkil.closetoquit",
+        "docktoggle":  "com.erenkirkil.docktoggle",
+        "tiler":       "com.erenkirkil.tiler",
+        "zenbar":      "com.erenkirkil.ZenBar",
+        "sclip":       "com.erenkirkil.sclip",
+    ]
+
+    private func loadConfig() throws -> [ManagedApp] {
+        // Test paketinden değil, kaynak ağacındaki dosyadan oku: yayınlanan veri bu.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // KDeckTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // paket kökü
+            .appendingPathComponent("Sources/KDeck/Resources/apps_config.json")
+        return try JSONDecoder().decode([ManagedApp].self, from: Data(contentsOf: url))
+    }
+
+    func testConfigBundleIDsMatchRealApps() throws {
+        for app in try loadConfig() {
+            guard let expected = realBundleIDs[app.id] else {
+                XCTFail("Testte karşılığı olmayan uygulama: \(app.id)")
+                continue
+            }
+            XCTAssertEqual(app.bundleIdentifier, expected,
+                           "\(app.id) için yapılandırmadaki bundle kimliği gerçek paketle uyuşmuyor")
+        }
+    }
+
+    func testEveryAppDeclaresABundleID() throws {
+        for app in try loadConfig() {
+            XCTAssertNotNil(app.bundleIdentifier, "\(app.id) bundle kimliği tanımlamıyor")
+            XCTAssertFalse(app.appFileName.isEmpty, "\(app.id) appFileName tanımlamıyor")
+        }
+    }
+}

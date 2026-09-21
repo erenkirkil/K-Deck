@@ -76,13 +76,21 @@ public enum SignatureVerifier: Sendable {
         guard !metadata.isEmpty else { throw VerificationError.metadataUnreadable }
 
         let foundTeamID = field("TeamIdentifier", in: metadata)
-        guard let team = foundTeamID, team == expectedTeamID else {
+        // Team ID'yi Apple büyük harf atar; karşılaştırmayı harf duyarsız yapmak güvenliği
+        // düşürmez ama yapılandırmadaki yazım farkının kurcalama sanılmasını önler.
+        guard let team = foundTeamID,
+              team.compare(expectedTeamID, options: .caseInsensitive) == .orderedSame else {
             throw VerificationError.teamIDMismatch(expected: expectedTeamID, found: foundTeamID)
         }
 
         if let expectedBundleID {
             let foundBundleID = field("Identifier", in: metadata)
-            guard let bundle = foundBundleID, bundle == expectedBundleID else {
+            // Bundle kimlikleri macOS'ta harf duyarsızdır (LaunchServices ve CFBundle
+            // karşılaştırmaları büyük/küçük harf ayırmaz), dolayısıyla yalnızca harf
+            // biçiminde ayrılan iki kimlik AYNI kimliktir. Tam eşleşme aramak güvenliği
+            // artırmıyor, yalnızca yapılandırmadaki yazım farkını kurcalama sanıyordu.
+            guard let bundle = foundBundleID,
+                  bundle.compare(expectedBundleID, options: .caseInsensitive) == .orderedSame else {
                 throw VerificationError.bundleIDMismatch(expected: expectedBundleID, found: foundBundleID)
             }
         }
